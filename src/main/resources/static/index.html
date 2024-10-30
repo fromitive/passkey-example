@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Passkey Registration</title>
+</head>
+<body>
+    <h2>Register a Passkey</h2>
+
+    <label for="username">Username:</label>
+    <input type="text" id="username" name="username" placeholder="Enter your username">
+
+    <button onclick="registerPasskey()">Register Passkey</button>
+
+    <script>
+        function toBase64Url(base64) {
+            return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        function base64UrlToBase64(base64Url) {
+            // URL-safe 형식을 표준 base64로 변환
+            let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+
+            // 패딩 추가 (길이가 4의 배수가 아닐 경우 '=' 추가)
+            while (base64.length % 4) {
+                base64 += '=';
+            }
+
+            return base64;
+        }
+
+        async function registerPasskey() {
+            const username = document.getElementById("username").value;
+
+            if (!username) {
+                alert("Please enter a username.");
+                return;
+            }
+
+            try {
+                // Step 1: GET /register/request로부터 옵션을 가져옵니다.
+                const response = await fetch(`/register/request?username=${encodeURIComponent(username)}`);
+                const options = await response.json();
+
+                // 서버에서 받은 challenge와 user ID 값을 URL-safe base64에서 표준 base64로 변환 후 디코딩
+                options.challenge = Uint8Array.from(atob(base64UrlToBase64(options.challenge)), c => c.charCodeAt(0));
+                options.user.id = Uint8Array.from(atob(base64UrlToBase64(options.user.id)), c => c.charCodeAt(0));
+
+
+                // excludeCredentials의 각 id를 ArrayBuffer 형식으로 변환
+                if (options.excludeCredentials) {
+                    options.excludeCredentials = options.excludeCredentials.map(cred => ({
+                        ...cred,
+                        id: Uint8Array.from(atob(base64UrlToBase64(cred.id)), c => c.charCodeAt(0)).buffer,
+                        transports: Array.isArray(cred.transports) ? cred.transports : [cred.transports] // 배열로 변환
+                    }));
+                }
+
+                if (options.extensions && options.extensions.appidExclude !== undefined) {
+                            delete options.extensions.appidExclude;
+                }
+
+
+
+                // Step 2: WebAuthn API를 통해 passkey 생성
+                const credential = await navigator.credentials.create({
+                    publicKey: options
+                });
+
+                // Step 3: 생성된 자격 증명 데이터를 서버로 전송합니다.
+                const attestationResponse = {
+                    id: credential.id,
+                    rawId: toBase64Url(btoa(String.fromCharCode(...new Uint8Array(credential.rawId)))),
+                    type: credential.type,
+                     response: {
+                        clientDataJSON: toBase64Url(btoa(String.fromCharCode(...new Uint8Array(credential.response.clientDataJSON)))),
+                        attestationObject: toBase64Url(btoa(String.fromCharCode(...new Uint8Array(credential.response.attestationObject))))
+                     },
+                     clientExtensionResults: {}
+                };
+
+                // POST /register/finish에 자격 증명 데이터를 전송하여 등록을 완료
+                const registerResponse = await fetch(`/register/finish`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(attestationResponse)
+                });
+
+                if (registerResponse.ok) {
+                    alert("Passkey registered successfully!");
+                } else {
+                    alert("Passkey registration failed.", error);
+                }
+            } catch (error) {
+                console.error("Error during passkey registration:", error);
+                alert("An error occurred during registration.");
+            }
+        }
+    </script>
+</body>
+</html>
