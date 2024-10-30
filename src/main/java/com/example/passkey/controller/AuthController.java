@@ -6,9 +6,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yubico.webauthn.AssertionRequest;
 import com.yubico.webauthn.AssertionResult;
 import com.yubico.webauthn.FinishAssertionOptions;
-import com.yubico.webauthn.FinishRegistrationOptions;
-import com.yubico.webauthn.RegisteredCredential;
-import com.yubico.webauthn.RegistrationResult;
 import com.yubico.webauthn.RelyingParty;
 import com.yubico.webauthn.StartAssertionOptions;
 import com.yubico.webauthn.data.AuthenticatorAssertionResponse;
@@ -19,7 +16,6 @@ import com.yubico.webauthn.data.ClientRegistrationExtensionOutputs;
 import com.yubico.webauthn.data.PublicKeyCredential;
 import com.yubico.webauthn.data.PublicKeyCredentialCreationOptions;
 import com.yubico.webauthn.exception.AssertionFailedException;
-import com.yubico.webauthn.exception.RegistrationFailedException;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -54,28 +50,12 @@ public class AuthController {
     @PostMapping("/register/finish")
     public ResponseEntity<Void> finishRegistration(
             @RequestBody PublicKeyCredential<AuthenticatorAttestationResponse, ClientRegistrationExtensionOutputs> credential
-            , HttpSession session) throws RegistrationFailedException {
+            , HttpSession session) {
 
         PublicKeyCredentialCreationOptions options = (PublicKeyCredentialCreationOptions) session.getAttribute(
                 "options");
         String userName = (String) session.getAttribute("name");
-        RegistrationResult result = relyingParty.finishRegistration(
-                FinishRegistrationOptions.builder().request(options)
-                        .response(credential)
-                        .build()
-        );
-
-        AuthenticatorAttestationResponse response = credential.getResponse();
-        ByteArray publicKey = response.getAttestation().getAuthenticatorData().getAttestedCredentialData().get()
-                .getCredentialPublicKey();
-
-        RegisteredCredential registeredCredential = RegisteredCredential.builder()
-                .credentialId(credential.getId())
-                .userHandle(options.getUser().getId())
-                .publicKeyCose(publicKey)
-                .build();
-
-        inMemoryCredentialRepository.addCredential(userName, registeredCredential);
+        registerationService.finish(options, credential, userName);
         return ResponseEntity.ok().build();
     }
 
