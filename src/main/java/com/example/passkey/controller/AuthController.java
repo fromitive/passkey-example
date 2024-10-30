@@ -1,7 +1,7 @@
 package com.example.passkey.controller;
 
 import com.example.passkey.repository.InMemoryCredentialRepository;
-import com.example.passkey.service.HandleGenerator;
+import com.example.passkey.service.RegisterationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yubico.webauthn.AssertionRequest;
 import com.yubico.webauthn.AssertionResult;
@@ -11,7 +11,6 @@ import com.yubico.webauthn.RegisteredCredential;
 import com.yubico.webauthn.RegistrationResult;
 import com.yubico.webauthn.RelyingParty;
 import com.yubico.webauthn.StartAssertionOptions;
-import com.yubico.webauthn.StartRegistrationOptions;
 import com.yubico.webauthn.data.AuthenticatorAssertionResponse;
 import com.yubico.webauthn.data.AuthenticatorAttestationResponse;
 import com.yubico.webauthn.data.ByteArray;
@@ -19,7 +18,6 @@ import com.yubico.webauthn.data.ClientAssertionExtensionOutputs;
 import com.yubico.webauthn.data.ClientRegistrationExtensionOutputs;
 import com.yubico.webauthn.data.PublicKeyCredential;
 import com.yubico.webauthn.data.PublicKeyCredentialCreationOptions;
-import com.yubico.webauthn.data.UserIdentity;
 import com.yubico.webauthn.exception.AssertionFailedException;
 import com.yubico.webauthn.exception.RegistrationFailedException;
 import jakarta.servlet.http.HttpSession;
@@ -34,32 +32,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final RelyingParty relyingParty;
-    private final HandleGenerator handleGenerator;
+    private final RegisterationService registerationService;
     private final InMemoryCredentialRepository inMemoryCredentialRepository;
 
-    public AuthController(RelyingParty relyingParty, HandleGenerator handleGenerator,
+    public AuthController(RelyingParty relyingParty, RegisterationService registerationService,
                           InMemoryCredentialRepository inMemoryCredentialRepository) {
         this.relyingParty = relyingParty;
-        this.handleGenerator = handleGenerator;
+        this.registerationService = registerationService;
         this.inMemoryCredentialRepository = inMemoryCredentialRepository;
     }
 
     @GetMapping("/register/request")
-    public ResponseEntity<PublicKeyCredentialCreationOptions> startRegistration(@RequestParam String username,
+    public ResponseEntity<PublicKeyCredentialCreationOptions> startRegistration(@RequestParam String userName,
                                                                                 HttpSession httpSession) {
-        ByteArray userHandle = inMemoryCredentialRepository.getUserHandleForUsername(username)
-                .orElseGet(() -> handleGenerator.generateRandom(32));
-        PublicKeyCredentialCreationOptions publicKeyCredentialCreationOptions = relyingParty.startRegistration(
-                StartRegistrationOptions.builder()
-                        .user(UserIdentity.builder()
-                                .name(username)
-                                .displayName(username)
-                                .id(userHandle)
-                                .build())
-                        .build());
-        httpSession.setAttribute("options", publicKeyCredentialCreationOptions);
-        httpSession.setAttribute("name", username);
-        return ResponseEntity.ok(publicKeyCredentialCreationOptions);
+        PublicKeyCredentialCreationOptions options = registerationService.start(userName);
+        httpSession.setAttribute("options", options);
+        httpSession.setAttribute("name", userName);
+        return ResponseEntity.ok(options);
     }
 
     @PostMapping("/register/finish")
