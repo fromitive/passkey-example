@@ -1,16 +1,11 @@
 package com.example.passkey.controller;
 
-import com.example.passkey.repository.InMemoryCredentialRepository;
+import com.example.passkey.service.AssertionService;
 import com.example.passkey.service.RegisterationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yubico.webauthn.AssertionRequest;
-import com.yubico.webauthn.AssertionResult;
-import com.yubico.webauthn.FinishAssertionOptions;
-import com.yubico.webauthn.RelyingParty;
-import com.yubico.webauthn.StartAssertionOptions;
 import com.yubico.webauthn.data.AuthenticatorAssertionResponse;
 import com.yubico.webauthn.data.AuthenticatorAttestationResponse;
-import com.yubico.webauthn.data.ByteArray;
 import com.yubico.webauthn.data.ClientAssertionExtensionOutputs;
 import com.yubico.webauthn.data.ClientRegistrationExtensionOutputs;
 import com.yubico.webauthn.data.PublicKeyCredential;
@@ -27,15 +22,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class AuthController {
 
-    private final RelyingParty relyingParty;
     private final RegisterationService registerationService;
-    private final InMemoryCredentialRepository inMemoryCredentialRepository;
+    private final AssertionService assertionService;
 
-    public AuthController(RelyingParty relyingParty, RegisterationService registerationService,
-                          InMemoryCredentialRepository inMemoryCredentialRepository) {
-        this.relyingParty = relyingParty;
+    public AuthController(RegisterationService registerationService, AssertionService assertionService) {
         this.registerationService = registerationService;
-        this.inMemoryCredentialRepository = inMemoryCredentialRepository;
+        this.assertionService = assertionService;
     }
 
     @GetMapping("/register/request")
@@ -51,7 +43,6 @@ public class AuthController {
     public ResponseEntity<Void> finishRegistration(
             @RequestBody PublicKeyCredential<AuthenticatorAttestationResponse, ClientRegistrationExtensionOutputs> credential
             , HttpSession session) {
-
         PublicKeyCredentialCreationOptions options = (PublicKeyCredentialCreationOptions) session.getAttribute(
                 "options");
         String userName = (String) session.getAttribute("name");
@@ -60,14 +51,11 @@ public class AuthController {
     }
 
     @GetMapping("/assertion/request")
-    public ResponseEntity<String> startAssertion(@RequestParam String username, HttpSession session)
+    public ResponseEntity<String> startAssertion(@RequestParam String userName, HttpSession session)
             throws JsonProcessingException {
-        AssertionRequest assertionRequest = relyingParty.startAssertion(StartAssertionOptions.builder()
-                .username(username)     // Or .userHandle(ByteArray) if preferred
-                .build());
-        session.setAttribute("assertionRequestOptions", assertionRequest);
-        String credentialGetJson = assertionRequest.toCredentialsGetJson();
-
+        AssertionRequest request = assertionService.start(userName);
+        session.setAttribute("assertionRequestOptions", request);
+        String credentialGetJson = request.toCredentialsGetJson();
         return ResponseEntity.ok(credentialGetJson);
     }
 
@@ -76,20 +64,9 @@ public class AuthController {
             @RequestBody PublicKeyCredential<AuthenticatorAssertionResponse, ClientAssertionExtensionOutputs> credential,
             HttpSession session) throws AssertionFailedException {
 
-        AssertionRequest options = (AssertionRequest) session.getAttribute("assertionRequestOptions");
-        AssertionResult result = relyingParty.finishAssertion(
-                FinishAssertionOptions.builder()
-                        .request(options)
-                        .response(credential)
-                        .build()
-        );
-        if (result.isSuccess()) {
-            String username = result.getUsername();
-            ByteArray credentialId = credential.getId();
-            long newSignatureCount = result.getSignatureCount();
-            inMemoryCredentialRepository.updateSignatureCount(username, credentialId, newSignatureCount);
-            return ResponseEntity.ok(result.getUsername());
-        }
-        throw new RuntimeException("Authentication failed");
+        AssertionRequest request = (AssertionRequest) session.getAttribute("assertionRequestOptions");
+        String userName = assertionService.finish(request, credential);
+
+        return ResponseEntity.ok(userName);
     }
 }
