@@ -39,7 +39,7 @@
 
             try {
                 // Step 1: GET /register/request로부터 옵션을 가져옵니다.
-                const response = await fetch(`/register/request?username=${encodeURIComponent(username)}`);
+                const response = await fetch(`/register/request?userName=${encodeURIComponent(username)}`);
                 const options = await response.json();
 
                 // 서버에서 받은 challenge와 user ID 값을 URL-safe base64에서 표준 base64로 변환 후 디코딩

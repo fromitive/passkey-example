@@ -40,7 +40,7 @@
 
             try {
                 // Step 1: Send login request to server to initiate WebAuthn assertion
-                const loginResponse = await fetch(`/assertion/request?username=${encodeURIComponent(username)}`);
+                const loginResponse = await fetch(`/assertion/request?userName=${encodeURIComponent(username)}`);
                 const assertionOptions = await loginResponse.json();
                 const publicKey = assertionOptions.publicKey
 
