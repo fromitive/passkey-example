@@ -68,7 +68,8 @@ public class InMemoryCredentialRepository implements CredentialRepository {
 
     public void addCredential(String username, RegisteredCredential credential) {
         ByteArray userId = userIdMapping.computeIfAbsent(username, (k) -> credential.getUserHandle());
-        credentials.computeIfAbsent(userId, k -> new ArrayList<>()).add(credential);
+        List<RegisteredCredential> registeredCredentials = credentials.computeIfAbsent(userId, k -> new ArrayList<>());
+        registeredCredentials.add(credential);
     }
 
     public void updateSignatureCount(String username, ByteArray credentialId, long newSignatureCount) {
